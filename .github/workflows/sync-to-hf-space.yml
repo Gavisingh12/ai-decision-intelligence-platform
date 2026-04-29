@@ -9,15 +9,32 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    env:
+      HF_SPACE_REPO_ID: ${{ vars.HF_SPACE_REPO_ID }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
 
+      - name: Check Hugging Face deployment configuration
+        id: hf-config
+        shell: bash
+        run: |
+          if [[ -z "${HF_SPACE_REPO_ID}" || -z "${HF_TOKEN}" ]]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Hugging Face sync is not configured yet. Add HF_SPACE_REPO_ID and HF_TOKEN to enable deployment."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "Hugging Face sync is configured."
+          fi
+
       - name: Prepare Space metadata
+        if: steps.hf-config.outputs.ready == 'true'
         run: cp deploy/huggingface/SPACE_README.md README.md
 
       - name: Sync repository to Hugging Face Space
+        if: steps.hf-config.outputs.ready == 'true'
         uses: huggingface/hub-sync@v0.1.0
         with:
           github_repo_id: ${{ github.repository }}
@@ -25,3 +42,7 @@ jobs:
           hf_token: ${{ secrets.HF_TOKEN }}
           repo_type: space
           space_sdk: docker
+
+      - name: Skip deployment until secrets are added
+        if: steps.hf-config.outputs.ready != 'true'
+        run: echo "Skipping Hugging Face deployment for now. Configure HF_SPACE_REPO_ID and HF_TOKEN in GitHub to enable live sync."
