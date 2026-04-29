@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Decision Assistant</title>
+    <link rel="stylesheet" href="/static/styles.css?v=11" />
+  </head>
+  <body>
+    <div class="app-frame">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <p class="eyebrow">Smart Planning</p>
+          <h1>Decision Assistant</h1>
+          <p class="sidebar-copy">Move from uploaded files to clear next steps without getting lost in setup details.</p>
+        </div>
+
+        <nav class="nav-list" id="pageNav">
+          <button class="nav-btn active" data-view="auth" type="button">
+            <span>Your Account</span>
+            <small>Sign in or switch users</small>
+          </button>
+          <button class="nav-btn" data-view="overview" type="button">
+            <span>Start</span>
+            <small>See the current workspace</small>
+          </button>
+          <button class="nav-btn" data-view="data" type="button">
+            <span>Upload</span>
+            <small>Add files and reports</small>
+          </button>
+          <button class="nav-btn" data-view="forecast" type="button">
+            <span>Train</span>
+            <small>Create a model</small>
+          </button>
+          <button class="nav-btn" data-view="classification" type="button">
+            <span>Results</span>
+            <small>Review what the model found</small>
+          </button>
+          <button class="nav-btn" data-view="assistant" type="button">
+            <span>Ask AI</span>
+            <small>Turn results into guidance</small>
+          </button>
+        </nav>
+
+        <div class="sidebar-foot" id="navFootnote">
+          Sign in to use the rest of the workspace.
+        </div>
+      </aside>
+
+      <div class="content-shell">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Helpful Tools For Your Data</p>
+            <h2 id="pageHeading">Your Account</h2>
+          </div>
+          <div class="topbar-actions">
+            <div class="session-pill" id="sessionStatus">Not signed in</div>
+            <div class="session-pill muted" id="lastSavedStatus">Nothing saved yet</div>
+            <button class="ghost-btn" id="logoutBtn" type="button" hidden>Logout</button>
+          </div>
+        </header>
+
+        <main class="page-stack">
+          <section class="page-view active" data-view="auth" id="authView">
+            <div class="hero-grid">
+              <section class="hero-copy">
+                <p class="eyebrow">Welcome</p>
+                <h3>One workspace for upload, training, results, and clear next steps.</h3>
+                <p>
+                  Sign in once, then move through a simple flow: upload your file, train the right model, review the result,
+                  and ask for guidance.
+                </p>
+                <div class="pill-list">
+                  <span class="pill neutral">Safer field selection</span>
+                  <span class="pill neutral">Free-hosting friendly</span>
+                  <span class="pill neutral">Guided AI answers</span>
+                </div>
+              </section>
+
+              <section class="band auth-band">
+                <div class="band-header">
+                  <h3>Your Account</h3>
+                  <div class="segmented" id="authMode">
+                    <button class="active" data-mode="login" type="button">Sign in</button>
+                    <button data-mode="register" type="button">Create account</button>
+                  </div>
+                </div>
+
+                <div class="list-stack auth-signed-in" id="authSignedInState" hidden>
+                  <article class="list-item">
+                    <strong>You are already signed in</strong>
+                    <div class="list-meta" id="authSignedInCopy"></div>
+                  </article>
+                  <button class="primary-btn" id="authContinueBtn" type="button">Go to Start</button>
+                </div>
+
+                <form id="authForm" class="form-grid">
+                  <label>
+                    <span>Email</span>
+                    <input type="email" name="email" placeholder="name@example.com" required />
+                  </label>
+                  <label id="fullNameGroup" hidden>
+                    <span>Full name</span>
+                    <input type="text" name="full_name" placeholder="Your name" />
+                  </label>
+                  <label>
+                    <span>Password</span>
+                    <input type="password" name="password" placeholder="At least 8 characters" required />
+                  </label>
+                  <button class="primary-btn full-span" type="submit" id="authSubmit">Sign in</button>
+                </form>
+                <p class="status-text" id="authStatus"></p>
+              </section>
+            </div>
+          </section>
+
+          <section class="page-view" data-view="overview" id="overviewView" hidden>
+            <section class="band">
+              <div class="band-header">
+                <div>
+                  <h3>Workspace Snapshot</h3>
+                  <p class="section-copy">See what is ready, what changed recently, and what to do next.</p>
+                </div>
+                <button class="ghost-btn" type="button" id="refreshDashboard">Refresh</button>
+              </div>
+              <div class="metrics-grid" id="metricsGrid"></div>
+            </section>
+
+            <div class="split-band">
+              <section class="band">
+                <div class="band-header">
+                  <h3>What To Do Next</h3>
+                </div>
+                <div class="list-stack" id="overviewSummary"></div>
+              </section>
+
+              <section class="band">
+                <div class="band-header">
+                  <h3>Free Hosting Notes</h3>
+                </div>
+                <div class="list-stack" id="hostingSummary"></div>
+              </section>
+            </div>
+
+            <section class="band">
+              <div class="band-header">
+                <h3>Recent Activity</h3>
+              </div>
+              <div class="list-stack" id="recentTaskList"></div>
+            </section>
+          </section>
+
+          <section class="page-view" data-view="data" id="dataView" hidden>
+            <div class="split-band">
+              <section class="band">
+                <div class="band-header">
+                  <div>
+                    <h3>Upload A Data File</h3>
+                    <p class="section-copy">Choose your file once, then pick columns from dropdowns instead of typing names by hand.</p>
+                  </div>
+                </div>
+                <form id="csvUploadForm" class="form-grid">
+                  <label class="full-span">
+                    <span>CSV file</span>
+                    <input type="file" id="csvFileInput" name="file" accept=".csv" required />
+                  </label>
+                  <label>
+                    <span>Name inside the app</span>
+                    <input type="text" name="name" placeholder="Crop data - North field" />
+                  </label>
+                  <label>
+                    <span>Main result column</span>
+                    <select name="target_column" id="uploadTargetSelect">
+                      <option value="">Let the app suggest one</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Date column</span>
+                    <select name="time_column" id="uploadTimeSelect">
+                      <option value="">No date column</option>
+                    </select>
+                  </label>
+                  <div class="full-span helper-box" id="uploadCsvHelper">
+                    Pick a CSV file to load its columns here before you upload.
+                  </div>
+                  <button class="primary-btn full-span" type="submit">Upload file</button>
+                </form>
+                <p class="status-text" id="csvStatus"></p>
+                <div class="dataset-table-wrap">
+                  <table id="datasetTable">
+                    <thead></thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section class="band">
+                <div class="band-header">
+                  <div>
+                    <h3>Upload A Report</h3>
+                    <p class="section-copy">PDF and text reports help the assistant answer with grounded context.</p>
+                  </div>
+                </div>
+                <form id="docUploadForm" class="form-grid">
+                  <label class="full-span">
+                    <span>Report file</span>
+                    <input type="file" name="file" accept=".pdf,.txt" required />
+                  </label>
+                  <label>
+                    <span>Display name</span>
+                    <input type="text" name="title" placeholder="Weekly field report" />
+                  </label>
+                  <button class="primary-btn full-span" type="submit">Upload report</button>
+                </form>
+                <p class="status-text" id="docStatus"></p>
+                <div class="list-stack" id="documentList"></div>
+              </section>
+            </div>
+
+            <section class="band">
+              <div class="band-header">
+                <h3>What We Detected</h3>
+              </div>
+              <div class="list-stack" id="workflowGuide"></div>
+            </section>
+
+            <section class="band">
+              <div class="band-header">
+                <h3>Your Uploaded Files</h3>
+              </div>
+              <div class="list-stack" id="datasetList"></div>
+            </section>
+          </section>
+
+          <section class="page-view" data-view="forecast" id="forecastView" hidden>
+            <section class="band">
+              <div class="band-header">
+                <div>
+                  <h3>Train The Right Model</h3>
+                  <p class="section-copy">The app will guide you toward either future estimates or best-match recommendations.</p>
+                </div>
+                <div class="segmented" id="trainMode">
+                  <button class="active" data-mode="forecast" type="button">Future values</button>
+                  <button data-mode="classification" type="button">Best match</button>
+                </div>
+              </div>
+              <div class="list-stack" id="trainRecommendation"></div>
+            </section>
+
+            <div class="split-band">
+              <section class="band train-panel active" id="forecastTrainPanel">
+                <div class="band-header">
+                  <div>
+                    <h3>Create A Future Estimate</h3>
+                    <p class="section-copy">Use this when the answer you want is a number that changes over time.</p>
+                  </div>
+                  <span class="panel-hint">Free-hosting friendly note: first request may take a moment if the backend is waking up.</span>
+                </div>
+                <form id="forecastForm" class="form-grid">
+                  <label>
+                    <span>File</span>
+                    <select name="dataset_id" id="datasetSelect"></select>
+                  </label>
+                  <label>
+                    <span>Number to estimate</span>
+                    <select name="target_column" id="forecastTargetInput"></select>
+                  </label>
+                  <label>
+                    <span>Date column</span>
+                    <select name="time_column" id="forecastTimeInput"></select>
+                  </label>
+                  <label>
+                    <span>Steps ahead</span>
+                    <input type="number" name="horizon" min="1" max="180" value="14" />
+                  </label>
+                  <details class="full-span details-card">
+                    <summary>Advanced settings</summary>
+                    <div class="details-grid">
+                      <label>
+                        <span>Look-back steps</span>
+                        <input type="text" name="lags" value="1,2,3,7,14" />
+                      </label>
+                      <label>
+                        <span>Test share</span>
+                        <input type="number" name="test_size" min="0.1" max="0.4" step="0.05" value="0.2" />
+                      </label>
+                    </div>
+                  </details>
+                  <button class="primary-btn full-span" type="submit">Create future estimate</button>
+                </form>
+                <p class="status-text" id="forecastStatus"></p>
+              </section>
+
+              <section class="band train-panel" id="classificationTrainPanel" hidden>
+                <div class="band-header">
+                  <div>
+                    <h3>Create A Recommendation Model</h3>
+                    <p class="section-copy">Use this when the answer is a label such as a crop name, category, or recommendation.</p>
+                  </div>
+                  <span class="panel-hint">This usually works best for datasets with answer columns such as label, class, or category.</span>
+                </div>
+                <form id="classificationForm" class="form-grid">
+                  <label>
+                    <span>File</span>
+                    <select name="dataset_id" id="classificationDatasetSelect"></select>
+                  </label>
+                  <label>
+                    <span>Answer column</span>
+                    <select name="target_column" id="classificationTargetInput"></select>
+                  </label>
+                  <details class="full-span details-card">
+                    <summary>Advanced settings</summary>
+                    <div class="details-grid">
+                      <label>
+                        <span>Test share</span>
+                        <input type="number" name="test_size" min="0.1" max="0.4" step="0.05" value="0.2" />
+                      </label>
+                      <label>
+                        <span>Class summary size</span>
+                        <input type="number" name="max_classes_for_report" min="2" max="100" value="20" />
+                      </label>
+                    </div>
+                  </details>
+                  <button class="primary-btn full-span" type="submit">Create recommendation model</button>
+                </form>
+                <p class="status-text" id="classificationStatus"></p>
+              </section>
+
+              <section class="band">
+                <div class="band-header">
+                  <h3>Saved Model Runs</h3>
+                </div>
+                <div class="list-stack" id="trainRunSummary"></div>
+              </section>
+            </div>
+          </section>
+
+          <section class="page-view" data-view="classification" id="classificationView" hidden>
+            <section class="band">
+              <div class="band-header">
+                <div>
+                  <h3>Results</h3>
+                  <p class="section-copy">Switch between future estimates and recommendations, then focus on the kind of result you need.</p>
+                </div>
+                <div class="stacked-segmented">
+                  <div class="segmented" id="resultsMode">
+                    <button class="active" data-mode="forecast" type="button">Future values</button>
+                    <button data-mode="classification" type="button">Best match</button>
+                  </div>
+                  <div class="segmented" id="resultsTab">
+                    <button class="active" data-tab="summary" type="button">Summary</button>
+                    <button data-tab="charts" type="button">Charts</button>
+                    <button data-tab="why" type="button">Why this result</button>
+                    <button data-tab="try" type="button">Try a prediction</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="band result-panel" id="forecastSummaryPanel">
+              <div class="band-header">
+                <h3>Future Estimate Summary</h3>
+                <button class="ghost-btn" type="button" id="refreshRun">Open selected result</button>
+              </div>
+              <label class="run-select">
+                <span>Saved future estimates</span>
+                <select id="runSelect"></select>
+              </label>
+              <div class="list-stack" id="runLibrary"></div>
+              <div class="metrics-grid compact" id="forecastMetrics"></div>
+            </section>
+
+            <section class="band result-panel" id="forecastChartsPanel" hidden>
+              <div class="band-header">
+                <h3>Future Estimate Charts</h3>
+              </div>
+              <div class="chart-grid">
+                <figure class="chart-card">
+                  <img id="forecastChart" alt="Future estimate chart" />
+                </figure>
+                <figure class="chart-card">
+                  <img id="globalShapChart" alt="Overall explanation chart" />
+                </figure>
+                <figure class="chart-card">
+                  <img id="localShapChart" alt="Latest-result explanation chart" />
+                </figure>
+              </div>
+            </section>
+
+            <section class="band result-panel" id="forecastWhyPanel" hidden>
+              <div class="band-header">
+                <h3>Why This Future Estimate Looks The Way It Does</h3>
+              </div>
+              <div class="list-stack insights-list" id="shapInsights"></div>
+            </section>
+
+            <section class="band result-panel" id="forecastTryPanel" hidden>
+              <div class="band-header">
+                <h3>Try Another Future Estimate</h3>
+                <button class="ghost-btn" type="button" id="predictAgain">Refresh estimate</button>
+              </div>
+              <div class="list-stack" id="forecastProjection"></div>
+            </section>
+
+            <section class="band result-panel" id="classificationSummaryPanel" hidden>
+              <div class="band-header">
+                <h3>Recommendation Summary</h3>
+                <button class="ghost-btn" type="button" id="refreshClassificationRun">Open selected result</button>
+              </div>
+              <label class="run-select">
+                <span>Saved recommendation models</span>
+                <select id="classificationRunSelect"></select>
+              </label>
+              <div class="list-stack" id="classificationRunLibrary"></div>
+              <div class="metrics-grid compact" id="classificationMetrics"></div>
+            </section>
+
+            <section class="band result-panel" id="classificationChartsPanel" hidden>
+              <div class="band-header">
+                <h3>Recommendation Charts</h3>
+              </div>
+              <div class="chart-grid two-up">
+                <figure class="chart-card">
+                  <img id="classificationImportanceChart" alt="Recommendation importance chart" />
+                </figure>
+                <figure class="chart-card">
+                  <img id="classificationConfusionChart" alt="Recommendation comparison chart" />
+                </figure>
+              </div>
+            </section>
+
+            <section class="band result-panel" id="classificationWhyPanel" hidden>
+              <div class="band-header">
+                <h3>Why This Recommendation Looks Strong</h3>
+              </div>
+              <div class="list-stack insights-list" id="classificationInsights"></div>
+            </section>
+
+            <section class="band result-panel" id="classificationTryPanel" hidden>
+              <div class="split-band">
+                <section class="band nested-band">
+                  <div class="band-header">
+                    <h3>Enter Your Values</h3>
+                  </div>
+                  <form id="classificationPredictForm" class="form-grid">
+                    <div class="full-span dynamic-fields" id="classificationFeatureFields"></div>
+                    <button class="primary-btn full-span" type="submit">Get recommendation</button>
+                  </form>
+                </section>
+
+                <section class="band nested-band">
+                  <div class="band-header">
+                    <h3>Suggested Result</h3>
+                  </div>
+                  <div class="list-stack" id="classificationPrediction"></div>
+                </section>
+              </div>
+            </section>
+          </section>
+
+          <section class="page-view" data-view="assistant" id="assistantView" hidden>
+            <section class="band">
+              <div class="band-header">
+                <div>
+                  <h3>Ask The Assistant</h3>
+                  <p class="section-copy">Ask a plain question and keep the evidence visible while you read the answer.</p>
+                </div>
+                <div class="segmented" id="assistantMode">
+                  <button class="active" data-mode="assistant" type="button">Smart answer</button>
+                  <button data-mode="rag" type="button">Reports only</button>
+                </div>
+              </div>
+              <div class="pill-list context-chip-row" id="assistantContextChips"></div>
+              <div class="helper-box">
+                Free-hosting note: the first answer after a pause can take a little longer while the backend wakes up.
+              </div>
+              <div class="assistant-layout">
+                <div class="conversation" id="conversation"></div>
+                <div class="assistant-side">
+                  <form id="assistantForm" class="assistant-form">
+                    <textarea
+                      name="question"
+                      rows="4"
+                      placeholder="Ask about your file, the results, or the best next step."
+                      required
+                    ></textarea>
+                    <button class="primary-btn" type="submit" id="assistantSubmit">Ask</button>
+                  </form>
+                  <section class="band nested-band">
+                    <div class="band-header">
+                      <h3>What The Answer Used</h3>
+                    </div>
+                    <div class="list-stack" id="assistantSourceList"></div>
+                  </section>
+                </div>
+              </div>
+            </section>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <script src="/static/config.js"></script>
+    <script src="/static/app.js?v=14"></script>
+  </body>
+</html>

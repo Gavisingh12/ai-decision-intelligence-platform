@@ -1,0 +1,3 @@
+window.DECISION_ASSISTANT_CONFIG = window.DECISION_ASSISTANT_CONFIG || {
+  apiBaseUrl: "",
+};

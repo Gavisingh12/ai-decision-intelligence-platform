@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: ai-decision-intelligence-platform
+    runtime: docker
+    plan: starter
+    autoDeploy: true
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: decision-intelligence-db
+          property: connectionString
+      - key: DEFAULT_LLM_PROVIDER
+        value: openai
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: EMBEDDING_MODEL_NAME
+        value: all-MiniLM-L6-v2
+    disk:
+      name: decision-intelligence-data
+      mountPath: /app/data
+      sizeGB: 2
+
+databases:
+  - name: decision-intelligence-db
+    databaseName: decision_intelligence
+    user: decision_intelligence

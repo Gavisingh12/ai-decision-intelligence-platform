@@ -1,0 +1,20 @@
+.venv/
+.venv312/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.pyo
+*.pyd
+.env
+data/app.db
+data/*.db
+data/models/
+data/artifacts/
+data/uploads/
+data/vector_store/
+deploy/cloudflare-pages/dist/
+uvicorn.out.log
+uvicorn.err.log
+demo dartaset/
+!data/sample_*.csv
+!data/sample_*.txt
