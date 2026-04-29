@@ -301,6 +301,23 @@ pytest
 
 This is the quickest fully free way to go live.
 
+### GitHub-driven Hugging Face deployment
+
+If you want GitHub to stay as the source of truth, this repository now includes:
+
+- [D:\Projects\AI Decision Intelligence Platform\.github\workflows\sync-to-hf-space.yml](</D:/Projects/AI Decision Intelligence Platform/.github/workflows/sync-to-hf-space.yml>)
+
+That workflow:
+
+- runs on every push to `main`
+- swaps in the Space-friendly README metadata before upload
+- syncs the repo to a Hugging Face Docker Space with the official `huggingface/hub-sync` action
+
+To use it, set:
+
+- GitHub secret: `HF_TOKEN`
+- GitHub variable: `HF_SPACE_REPO_ID` with a value like `your-hf-username/ai-decision-intelligence-platform`
+
 ### Free deployment path 2: Cloudflare Pages + Hugging Face Space + Supabase
 
 1. Create a Supabase project and copy its Postgres connection string into `DATABASE_URL`.
