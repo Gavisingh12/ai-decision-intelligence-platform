@@ -173,6 +173,24 @@ function getDatasetName(datasetId) {
   return getDatasetById(datasetId)?.name || `File ${datasetId}`;
 }
 
+function getActiveAssistantDatasetId() {
+  return state.resultsMode === "classification"
+    ? Number(elements.classificationDatasetSelect.value || 0) || null
+    : Number(elements.datasetSelect.value || 0) || null;
+}
+
+function getActiveAssistantForecastRunId() {
+  return state.resultsMode === "forecast" && elements.runSelect.value
+    ? Number(elements.runSelect.value)
+    : null;
+}
+
+function getActiveAssistantClassificationRunId() {
+  return state.resultsMode === "classification" && elements.classificationRunSelect.value
+    ? Number(elements.classificationRunSelect.value)
+    : null;
+}
+
 function getWorkflowLabel(workflow) {
   const labels = {
     forecasting: "Future values",
@@ -989,21 +1007,22 @@ function renderAssistantContext() {
     return;
   }
 
-  const selectedDataset =
+  const selectedDataset = getDatasetById(getActiveAssistantDatasetId());
+  const activeModeLabel = state.resultsMode === "classification" ? "Best match" : "Future values";
+  const activeModelLabel =
     state.resultsMode === "classification"
-      ? getDatasetById(elements.classificationDatasetSelect.value)
-      : getDatasetById(elements.datasetSelect.value);
+      ? getActiveAssistantClassificationRunId()
+        ? `Saved recommendation ${getActiveAssistantClassificationRunId()}`
+        : "No saved recommendation yet"
+      : getActiveAssistantForecastRunId()
+        ? `Saved estimate ${getActiveAssistantForecastRunId()}`
+        : "No saved estimate yet";
 
   const chips = [
     { label: "Answer mode", value: state.assistantMode === "rag" ? "Reports only" : "Smart answer" },
     { label: "File", value: selectedDataset?.name || "Not chosen" },
-    { label: "Future estimate", value: state.runs.length ? `Saved estimate ${elements.runSelect.value || state.runs[0].id}` : "None" },
-    {
-      label: "Recommendation",
-      value: state.classificationRuns.length
-        ? `Saved recommendation ${elements.classificationRunSelect.value || state.classificationRuns[0].id}`
-        : "None",
-    },
+    { label: "Using", value: activeModeLabel },
+    { label: "Model", value: activeModelLabel },
     { label: "Reports", value: `${state.documents.length}` },
   ];
 
@@ -1532,21 +1551,14 @@ async function handleAssistant(event) {
       return;
     }
 
-    const datasetId =
-      state.resultsMode === "classification"
-        ? Number(elements.classificationDatasetSelect.value || 0) || null
-        : Number(elements.datasetSelect.value || 0) || null;
-
     const response = await apiFetch("/api/v1/assistant/ask", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         question,
-        dataset_id: datasetId,
-        forecast_run_id: elements.runSelect.value ? Number(elements.runSelect.value) : null,
-        classification_run_id: elements.classificationRunSelect.value
-          ? Number(elements.classificationRunSelect.value)
-          : null,
+        dataset_id: getActiveAssistantDatasetId(),
+        forecast_run_id: getActiveAssistantForecastRunId(),
+        classification_run_id: getActiveAssistantClassificationRunId(),
         top_k: 4,
       }),
     });

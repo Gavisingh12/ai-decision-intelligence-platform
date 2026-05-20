@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 import re
 from typing import Any
 
@@ -38,14 +39,25 @@ class DecisionAssistantService:
         """Generate a decision-focused answer."""
 
         dataset = self._resolve_dataset(db=db, dataset_id=dataset_id)
-        classification_run = self._resolve_classification_run(
-            db=db,
-            dataset_id=dataset.id if dataset else dataset_id,
-            classification_run_id=classification_run_id,
+        dataset_metadata = dataset.metadata_json if dataset and isinstance(dataset.metadata_json, dict) else {}
+        classification_workflow = dataset_metadata.get("recommended_workflow") == "classification"
+        question_wants_forecast = self._question_is_forecast_oriented(question)
+        should_include_classification = bool(classification_run_id) or classification_workflow
+
+        classification_run = (
+            self._resolve_classification_run(
+                db=db,
+                dataset_id=dataset.id if dataset else dataset_id,
+                classification_run_id=classification_run_id,
+            )
+            if should_include_classification
+            else None
         )
-        should_include_forecast = bool(forecast_run_id) or not (
-            dataset and dataset.metadata_json.get("recommended_workflow") == "classification"
-        )
+        should_include_forecast = False
+        if forecast_run_id:
+            should_include_forecast = not should_include_classification or question_wants_forecast
+        elif dataset_id:
+            should_include_forecast = not classification_workflow or question_wants_forecast
         forecast_run = (
             self._resolve_forecast_run(
                 db=db,
@@ -125,6 +137,27 @@ class DecisionAssistantService:
         return db.query(Dataset).filter(Dataset.id == dataset_id).first()
 
     @staticmethod
+    def _question_is_forecast_oriented(question: str) -> bool:
+        """Detect when the user is explicitly asking for forecast or trend details."""
+
+        patterns = (
+            r"\bforecast\b",
+            r"\bfuture\b",
+            r"\btrend\b",
+            r"\bprojection\b",
+            r"\bprojected\b",
+            r"\bover time\b",
+            r"\btime series\b",
+            r"\bnext\s+\d+\b",
+            r"\bnext\s+(day|days|week|weeks|month|months|quarter|quarters|season|seasons|year|years)\b",
+            r"\bupward\b",
+            r"\bdownward\b",
+            r"\bflat\b",
+        )
+        lowered = question.lower()
+        return any(re.search(pattern, lowered) for pattern in patterns)
+
+    @staticmethod
     def _resolve_forecast_run(
         *,
         db: Session,
@@ -135,6 +168,11 @@ class DecisionAssistantService:
 
         query = db.query(ForecastRun)
         if forecast_run_id:
+            if dataset_id:
+                return query.filter(
+                    ForecastRun.id == forecast_run_id,
+                    ForecastRun.dataset_id == dataset_id,
+                ).first()
             return query.filter(ForecastRun.id == forecast_run_id).first()
         if dataset_id:
             return (
@@ -142,7 +180,7 @@ class DecisionAssistantService:
                 .order_by(ForecastRun.created_at.desc())
                 .first()
             )
-        return query.order_by(ForecastRun.created_at.desc()).first()
+        return None
 
     @staticmethod
     def _resolve_classification_run(
@@ -155,6 +193,11 @@ class DecisionAssistantService:
 
         query = db.query(ClassificationRun)
         if classification_run_id:
+            if dataset_id:
+                return query.filter(
+                    ClassificationRun.id == classification_run_id,
+                    ClassificationRun.dataset_id == dataset_id,
+                ).first()
             return query.filter(ClassificationRun.id == classification_run_id).first()
         if dataset_id:
             return (
@@ -162,7 +205,7 @@ class DecisionAssistantService:
                 .order_by(ClassificationRun.created_at.desc())
                 .first()
             )
-        return query.order_by(ClassificationRun.created_at.desc()).first()
+        return None
 
     @staticmethod
     def _summarize_forecast_run(run: ForecastRun) -> dict[str, Any]:
@@ -182,6 +225,7 @@ class DecisionAssistantService:
             "run_id": run.id,
             "model_name": run.model_name,
             "target_column": run.target_column,
+            "time_column": run.time_column,
             "horizon": run.horizon,
             "evaluation": run.metrics_json.get("evaluation", {}),
             "trend": trend,
@@ -301,6 +345,10 @@ class DecisionAssistantService:
                 "I found some feature values in your question, but not enough for a direct classification prediction."
             )
             why_it_matters.append(f"Missing values for: {missing}.")
+        elif classification_summary:
+            what_happened.append(
+                "I used the latest recommendation model for this file to explain which inputs matter most."
+            )
 
         if classification_summary:
             metrics = classification_summary.get("evaluation", {})
@@ -323,14 +371,12 @@ class DecisionAssistantService:
             what_happened.append(
                 f"The latest forecast for {forecast_summary['target_column']} shows a {forecast_summary['trend']} trend."
             )
-            forecast_tail = forecast_summary.get("latest_forecast", [])
+            forecast_tail = DecisionAssistantService._format_forecast_tail(forecast_summary)
             if forecast_tail:
-                tail_text = ", ".join(
-                    f"{row['timestamp']}: {row['prediction']:.2f}" for row in forecast_tail
-                )
+                tail_text = ", ".join(forecast_tail)
                 why_it_matters.append(f"Recent forecast points were {tail_text}.")
             for warning in forecast_summary.get("warnings", []):
-                next_steps.append(warning)
+                next_steps.append(DecisionAssistantService._humanize_forecast_warning(warning))
 
         if explainability_summary:
             global_features = explainability_summary.get("global_top_features", [])[:3]
@@ -350,7 +396,7 @@ class DecisionAssistantService:
 
         if dataset and dataset.metadata_json.get("recommended_workflow") == "classification":
             next_steps.append(
-                "This dataset is classification-oriented, so crop suitability questions are better answered from the classification run than from forecasting."
+                "This file is better suited to recommendation questions, so crop suitability answers should come from the recommendation model first."
             )
 
         if not what_happened:
@@ -374,6 +420,94 @@ class DecisionAssistantService:
             + "\n\nRecommended next steps\n"
             + "\n".join(f"- {line}" for line in next_steps)
         )
+
+    @staticmethod
+    def _format_forecast_tail(forecast_summary: dict[str, Any]) -> list[str]:
+        """Format forecast points in a user-friendly way."""
+
+        time_column = forecast_summary.get("time_column")
+        formatted: list[str] = []
+        for position, row in enumerate(forecast_summary.get("latest_forecast", []), start=1):
+            label = DecisionAssistantService._format_forecast_label(
+                timestamp=row.get("timestamp"),
+                position=position,
+                time_column=time_column,
+            )
+            prediction = row.get("prediction")
+            prediction_text = (
+                f"{float(prediction):.2f}"
+                if isinstance(prediction, (int, float))
+                else str(prediction)
+            )
+            formatted.append(f"{label}: {prediction_text}")
+        return formatted
+
+    @staticmethod
+    def _format_forecast_label(
+        *,
+        timestamp: Any,
+        position: int,
+        time_column: str | None,
+    ) -> str:
+        """Format either a time value or a step counter for forecast points."""
+
+        if not time_column:
+            step_value = DecisionAssistantService._coerce_step_number(timestamp)
+            return f"Step {step_value}" if step_value is not None else f"Step {position}"
+
+        timestamp_text = DecisionAssistantService._clean_timestamp_text(timestamp)
+        return timestamp_text or f"Point {position}"
+
+    @staticmethod
+    def _coerce_step_number(value: Any) -> int | None:
+        """Convert a raw step value into an integer when possible."""
+
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return None
+        if numeric.is_integer():
+            return int(numeric)
+        return None
+
+    @staticmethod
+    def _clean_timestamp_text(value: Any) -> str | None:
+        """Reduce timestamp formatting noise for fallback answers."""
+
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value.strftime("%Y-%m-%d %H:%M")
+
+        text = str(value).strip()
+        if not text:
+            return None
+
+        match = re.match(r"^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?$", text)
+        if match:
+            date_part, time_part = match.groups()
+            return f"{date_part} {time_part}"
+
+        return text
+
+    @staticmethod
+    def _humanize_forecast_warning(warning: str) -> str:
+        """Rewrite technical forecast caveats into plainer language."""
+
+        ignored_prefix = "Ignored unsupported categorical features for forecasting: "
+        if warning.startswith(ignored_prefix):
+            ignored_fields = warning.removeprefix(ignored_prefix)
+            return (
+                "This future estimate used number-based inputs only, so these non-number fields were skipped: "
+                f"{ignored_fields}."
+            )
+
+        if warning.startswith("No time column was supplied."):
+            return (
+                "No date column was provided, so this estimate follows the current row order instead of calendar time."
+            )
+
+        return warning
 
 
 decision_assistant_service = DecisionAssistantService()
